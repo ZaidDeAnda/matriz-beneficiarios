@@ -56,7 +56,7 @@ def load_symmetric_data(dummy_df, _categorias, _n):
         for j in range(_n):
             if i == j:
                 # Contar ocurrencias de una sola categoría
-                symmetric_matrix[i, j] = (dummy_df[_categorias[i]] == 1)
+                symmetric_matrix[i, j] = (dummy_df[_categorias[i]] == 1).sum()
             else:
                 # Contar combinaciones de dos categorías
                 symmetric_matrix[i, j] = ((dummy_df[_categorias[i]] == 1) & (dummy_df[_categorias[j]] == 1)).sum()
