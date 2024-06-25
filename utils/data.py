@@ -41,6 +41,7 @@ def load_generic_data():
     df.drop(["programa"], inplace=True, axis=1)
     df.drop(["persona_id"], inplace=True, axis=1)
     dummy_df = pd.get_dummies(df.loc[df["via"] != 'NA'], columns=["via"], prefix="", prefix_sep="").groupby(["CURP",'sexo']).sum()
+    dummy_df[dummy_df > 1] = 1
     categorias = dummy_df.columns
     n = len(categorias)
 
@@ -55,7 +56,7 @@ def load_symmetric_data(dummy_df, _categorias, _n):
         for j in range(_n):
             if i == j:
                 # Contar ocurrencias de una sola categoría
-                symmetric_matrix[i, j] = (dummy_df[_categorias[i]] == 1).sum()
+                symmetric_matrix[i, j] = (dummy_df[_categorias[i]] == 1)
             else:
                 # Contar combinaciones de dos categorías
                 symmetric_matrix[i, j] = ((dummy_df[_categorias[i]] == 1) & (dummy_df[_categorias[j]] == 1)).sum()

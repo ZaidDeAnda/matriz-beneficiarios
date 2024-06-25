@@ -3,8 +3,11 @@ import streamlit as st
 
 def check_password():
     user_dict = {
-        "proteccionsocial" : "123456789",
-        "sistemas" : "planeacion"
+        "via-educacion" : "40qQ1",
+        "via-salud" : "Hp941",
+        "via-trabajo" : "dX803",
+        "via-vivienda" : "29Q3r",
+        "via-alimentacion" : "zN436",
     }
     """Returns `True` if the user had a correct password."""
 
