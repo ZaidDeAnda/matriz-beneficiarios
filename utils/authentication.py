@@ -49,7 +49,18 @@ def check_password():
         return True
 
 
-
 def get_user():
     st.session_state["username"] = st.session_state["username"]
     return st.session_state["username"]
+
+def select_via(user):
+    if user == "via-educacion":
+        return "Educación"
+    elif user == "via-salud":
+        return "Salud"
+    elif user == "via-trabajo":
+        return "Ingreso Y Trabajo"
+    elif user == "via-vivienda":
+        return "Vivienda"
+    elif user == "via-alimentacion":
+        return "Alimentación"

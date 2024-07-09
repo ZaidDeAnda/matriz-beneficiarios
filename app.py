@@ -1,20 +1,22 @@
 import streamlit as st
 
-from utils.authentication import check_password
-from utils.data import load_generic_data, load_symmetric_data, load_accumulative_data
+from utils.authentication import check_password, get_user
+
+st.set_page_config(layout="wide")
 
 if check_password():
 
-    st.header("Complementariedad Usuarios Únicos nueva ruta")
+    user = get_user()
+    if user == "via-educacion":
+        pages = {
+            "Mapa" : [
+                st.Page("vistas/mapa.py", title="Mapa")
+            ],
+            "Vistas" : [
+                st.Page("vistas/vista.py", title="Vista matriz"),
+                st.Page("vistas/buscador.py", title="Buscador de curps")
+            ]
+        }
 
-    dummy_df, categories, n = load_generic_data()
-
-    symmetric_df = load_symmetric_data(dummy_df, categories, n)
-
-    st.dataframe(symmetric_df)
-
-    st.header("Usuarios Únicos Nueva Ruta")
-
-    accumulative_df = load_accumulative_data(dummy_df, categories)
-
-    st.dataframe(accumulative_df)
+        pg = st.navigation(pages)
+        pg.run()
