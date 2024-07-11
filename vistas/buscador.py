@@ -5,27 +5,15 @@ import pandas as pd
 from utils.data import download_df, load_generic_data_non_dummy
 from utils.authentication import get_user, select_via
 
-st.subheader("Registro de tarjetas Programas sociales")
+st.subheader("Vista de usuarios por via")
 
 user = select_via(get_user())
 
-total_df = load_generic_data_non_dummy(user)
+total_df = load_generic_data_non_dummy(user, limit=2000)
 
 st.dataframe(total_df)
 with st.form("my_form", clear_on_submit=False):
-    submit = st.form_submit_button("Descargar BD", on_click=download_df, kwargs={"table" : "ps", "total_df":total_df, "user":user})
+    submit = st.form_submit_button("Descargar BD", on_click=download_df, kwargs={"table" : user})
 # try:
-# except:
-#     st.warning("Lo sentimos, la base de datos está presentando algunos fallos, estamos trabajando en ello ⚙ 👷‍♂️")
-
-st.markdown('-----')
-
-st.subheader("Registro de tarjetas Jefas de Familia")
-
-# try:
-#     vw_jefas = read_data("jf", total_df, "partial")
-#     st.dataframe(vw_jefas)
-#     with st.form("my_form2", clear_on_submit=False):
-#         submit = st.form_submit_button("Descargar BD", on_click=download_df, kwargs={"table" : "jf", "total_df":total_df})
 # except:
 #     st.warning("Lo sentimos, la base de datos está presentando algunos fallos, estamos trabajando en ello ⚙ 👷‍♂️")

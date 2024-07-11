@@ -85,10 +85,16 @@ def load_generic_data():
     return dummy_df, categorias, n
 
 @st.cache_data
-def load_generic_data_non_dummy(user):
+def load_generic_data_non_dummy(user, limit=""):
     config = Config()
 
-    query = """
+    if limit:
+        limit_keyword = " LIMIT "+str(limit)
+    else:
+        print("Sin limite")
+        limit_keyword = ""
+
+    query = f"""
     SELECT p."CURP",
         p.id AS persona_id,
         pp.id as idprograma,
@@ -97,7 +103,7 @@ def load_generic_data_non_dummy(user):
         LEFT JOIN "PersonasOnTramites" pt ON p.id = pt.persona_id
         LEFT JOIN "Tramite" t ON t.id = pt.tramite_id
         LEFT JOIN "ProcesoPrograma" pp ON pp.id = t.proceso_id
-    WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]);
+    WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]){limit_keyword};
     """
 
     secrets = config.get_config()['vias']
@@ -107,9 +113,7 @@ def load_generic_data_non_dummy(user):
     df1 = pd.read_sql(query, connection)
     df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "NombrePrograma"]
 
-    df2 = pd.read_csv("data/beneficiarios_ps.csv", encoding="latin", sep=";")
-
-    total_df = pd.concat([df1, df2], axis=0)
+    total_df = df1
 
     total_df["Via"] = total_df["NombrePrograma"].str.upper().replace(via_dict)
 
@@ -153,23 +157,6 @@ def load_accumulative_data(dummy_df, _categorias):
     accumulative_df = pd.DataFrame.from_dict(accumulative).T
     accumulative_df['Total'] = accumulative_df.sum(axis=1)
     return accumulative_df
-
-def read_data_from_sql(table, selection):
-    config = Config()
-
-    secrets = config.get_config()[table]
-
-    conn = connect_sql(secrets)
-
-    if selection == "partial":
-        limit = " TOP 500"
-    else:
-        limit = ""
-    query = f'''Select{limit} * FROM vw_beneficariotarjetas'''
-        
-    data = pd.read_sql_query(query, conn)
-
-    return data
         
 def drop_missing(df):
     filtered_df = df.loc[df['CURP'].notna()]
@@ -208,8 +195,8 @@ def download_button(object_to_download, download_filename):
     return dl_link
 
 
-def download_df(table, total_df, user):
-    df = read_data(table, total_df, user)
+def download_df(table):
+    df = load_generic_data_non_dummy(table)
     csv = df.to_csv().encode('utf-8')
     components.html(
         download_button(csv, f"beneficiarios_{table}.csv"),
