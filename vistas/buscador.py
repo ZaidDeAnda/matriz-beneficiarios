@@ -2,17 +2,16 @@ import streamlit as st
 from io import StringIO
 import pandas as pd
 
-from utils.data import read_data, download_df, load_generic_data_non_dummy
+from utils.data import download_df, load_generic_data_non_dummy
 from utils.authentication import get_user, select_via
 
 st.subheader("Registro de tarjetas Programas sociales")
 
 user = select_via(get_user())
 
-total_df = load_generic_data_non_dummy()
+total_df = load_generic_data_non_dummy(user)
 
-vw_programas = read_data("ps", total_df, user, "partial")
-st.dataframe(vw_programas)
+st.dataframe(total_df)
 with st.form("my_form", clear_on_submit=False):
     submit = st.form_submit_button("Descargar BD", on_click=download_df, kwargs={"table" : "ps", "total_df":total_df, "user":user})
 # try:

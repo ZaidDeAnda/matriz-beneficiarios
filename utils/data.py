@@ -85,7 +85,7 @@ def load_generic_data():
     return dummy_df, categorias, n
 
 @st.cache_data
-def load_generic_data_non_dummy():
+def load_generic_data_non_dummy(user):
     config = Config()
 
     query = """
@@ -105,16 +105,15 @@ def load_generic_data_non_dummy():
     connection = connect_post(secrets)
 
     df1 = pd.read_sql(query, connection)
-    df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "Via"]
+    df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "NombrePrograma"]
 
     df2 = pd.read_csv("data/beneficiarios_ps.csv", encoding="latin", sep=";")
 
     total_df = pd.concat([df1, df2], axis=0)
 
-    total_df.drop('IdPrograma', inplace=True, axis=1)
-    total_df.drop('IDBeneficiario', inplace=True, axis=1)
+    total_df["Via"] = total_df["NombrePrograma"].str.upper().replace(via_dict)
 
-    total_df["Via"] = total_df["Via"].str.upper().replace(via_dict)
+    total_df = total_df[total_df["Via"] == user]
 
     return total_df
 
@@ -171,20 +170,7 @@ def read_data_from_sql(table, selection):
     data = pd.read_sql_query(query, conn)
 
     return data
-
-def read_data(table,total_df, user, selection="complete"):
-    if selection=="debug":
-        data = pd.read_csv('data-integrator completo.csv')
-    else:
-        data = read_data_from_sql(table, selection)
-    filtered_df = drop_missing(data)
-    filtered_df['CURP'] = filtered_df['CURP'].astype({'CURP':'string'})
-    total_df['CURP'] = total_df['CURP'].astype({'CURP':'string'})
-    joined_df = filtered_df.merge(total_df, on="CURP")
-    joined_df = joined_df[joined_df["Via"] == user]
-    return joined_df
         
-
 def drop_missing(df):
     filtered_df = df.loc[df['CURP'].notna()]
     return filtered_df

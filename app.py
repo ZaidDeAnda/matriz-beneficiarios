@@ -9,12 +9,9 @@ if check_password():
     user = get_user()
     if user:
         pages = {
-            "Mapa" : [
-                st.Page("vistas/mapa.py", title="Mapa")
-            ],
             "Vistas" : [
                 st.Page("vistas/vista.py", title="Vista matriz"),
-                st.Page("vistas/buscador.py", title="Buscador de curps")
+                st.Page("vistas/buscador.py", title="Vista por vía")
             ]
         }
 
