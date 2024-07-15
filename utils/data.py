@@ -210,11 +210,11 @@ def download_button(object_to_download, download_filename):
     return dl_link
 
 
-def download_df(table):
-    df = load_generic_data_non_dummy(table)
+def download_df(user="",curp_list=""):
+    df = load_generic_data_non_dummy(user=user, curp_list=curp_list)
     csv = df.to_csv().encode('utf-8')
     components.html(
-        download_button(csv, f"beneficiarios_{table}.csv"),
+        download_button(csv, f"beneficiarios_{user}.csv"),
         height=0,)
     
 def calcular_edad(fecha_nacimiento):
