@@ -219,5 +219,8 @@ def download_df(user="",curp_list=""):
     
 def calcular_edad(fecha_nacimiento):
     hoy = datetime.today()
-    edad = hoy.year - fecha_nacimiento.year - ((hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
+    try:
+        edad = hoy.year - fecha_nacimiento.year - ((hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
+    except:
+        edad = "No encontrada"
     return edad
