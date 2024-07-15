@@ -3,6 +3,7 @@ import numpy as np
 import streamlit as st
 import streamlit.components.v1 as components
 import base64
+from datetime import datetime
 
 from utils.database import connect_post, connect_sql
 from utils.config import Config
@@ -85,11 +86,14 @@ def load_generic_data():
     return dummy_df, categorias, n
 
 @st.cache_data
-def load_generic_data_non_dummy(user, limit=""):
+def load_generic_data_non_dummy(user="", limit="", curp_list=""):
     config = Config()
 
     if limit:
         limit_keyword = " LIMIT "+str(limit)
+    elif curp_list:
+        curp_str = '(\'' + '\',\''.join(curp_list) + '\')'
+        limit_keyword = f' AND p."CURP" IN {curp_str}'
     else:
         print("Sin limite")
         limit_keyword = ""
@@ -97,12 +101,19 @@ def load_generic_data_non_dummy(user, limit=""):
     query = f"""
     SELECT p."CURP",
         p.id AS persona_id,
+        p.nombres as nombres,
+        p.ap_paterno as ApellidoPaterno,
+        p.ap_materno as ApellidoMaterno,
+        ig.municipio_label as municipio,
+        p.sexo as sexo,
+        p.fecha_nacimiento as fecha_nacimiento,
         pp.id as idprograma,
         pp.nombre AS nombre_programa
     FROM "Persona" p
         LEFT JOIN "PersonasOnTramites" pt ON p.id = pt.persona_id
         LEFT JOIN "Tramite" t ON t.id = pt.tramite_id
         LEFT JOIN "ProcesoPrograma" pp ON pp.id = t.proceso_id
+        LEFT JOIN "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
     WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]){limit_keyword};
     """
 
@@ -111,13 +122,17 @@ def load_generic_data_non_dummy(user, limit=""):
     connection = connect_post(secrets)
 
     df1 = pd.read_sql(query, connection)
-    df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "NombrePrograma"]
+    df1.columns = ["CURP", "IDBeneficiario", "Nombres", "Apellido Paterno", "Apellido Materno", "Municipio", "Sexo", "Fecha de Nacimiento","IdPrograma", "NombrePrograma"]
 
     total_df = df1
 
     total_df["Via"] = total_df["NombrePrograma"].str.upper().replace(via_dict)
 
-    total_df = total_df[total_df["Via"] == user]
+    if user:
+        total_df = total_df[total_df["Via"] == user]
+
+    total_df['edad'] = total_df['Fecha de Nacimiento'].apply(calcular_edad)
+    total_df.drop('Fecha de Nacimiento', inplace=True, axis=1)
 
     return total_df
 
@@ -201,3 +216,8 @@ def download_df(table):
     components.html(
         download_button(csv, f"beneficiarios_{table}.csv"),
         height=0,)
+    
+def calcular_edad(fecha_nacimiento):
+    hoy = datetime.today()
+    edad = hoy.year - fecha_nacimiento.year - ((hoy.month, hoy.day) < (fecha_nacimiento.month, fecha_nacimiento.day))
+    return edad

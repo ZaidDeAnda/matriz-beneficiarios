@@ -11,7 +11,8 @@ if check_password():
         pages = {
             "Vistas" : [
                 st.Page("vistas/vista.py", title="Vista matriz"),
-                st.Page("vistas/buscador.py", title="Vista por vía")
+                st.Page("vistas/individual.py", title="Vista por vía"),
+                st.Page("vistas/buscador.py", title="Buscador de curps")
             ]
         }
 
