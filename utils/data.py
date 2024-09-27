@@ -97,42 +97,76 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
     else:
         print("Sin limite")
         limit_keyword = ""
+    if user == "proteccion":
+        user = "pp.nombre = ANY (ARRAY['Hambre Cero', 'FISE', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento'])"
+    elif user:
+        user = f"pp.via = '{user}'"
+        print(user)
 
     query = f"""
-    SELECT p."CURP",
-        p.id AS persona_id,
-        p.nombres as nombres,
-        p.ap_paterno as ApellidoPaterno,
-        p.ap_materno as ApellidoMaterno,
-        ig.municipio_label as municipio,
-        p.sexo as sexo,
-        p.fecha_nacimiento as fecha_nacimiento,
-        pp.id as idprograma,
-        pp.nombre AS nombre_programa
-    FROM "Persona" p
-        LEFT JOIN "PersonasOnTramites" pt ON p.id = pt.persona_id
-        LEFT JOIN "Tramite" t ON t.id = pt.tramite_id
-        LEFT JOIN "ProcesoPrograma" pp ON pp.id = t.proceso_id
-        LEFT JOIN "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
-    WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]){limit_keyword};
+    WITH IdentificacionesGeograficas AS (
+    SELECT *, 
+           ROW_NUMBER() OVER (PARTITION BY persona_id ORDER BY identificacion_geografica_id DESC) AS rn
+    FROM "PersonasOnIdentificacionesGeograficas"
+    )
+    SELECT 
+        p."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        pp.nombre AS nombre_programa, 
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Persona" p
+    LEFT JOIN 
+        "PersonasOnTramites" pt ON p.id = pt.persona_id
+    LEFT JOIN 
+        "Tramite" t ON t.id = pt.tramite_id
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = t.proceso_id
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
+    WHERE 
+        pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37])
+    AND 
+        {user}
+
+    UNION
+
+    SELECT 
+        b."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        CAST(pp.nombre AS VARCHAR) AS nombre_programa,
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Beneficiario" b
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = b.programa_id
+    LEFT JOIN 
+        "Persona" p ON p."CURP" = b."CURP"
+    LEFT JOIN 
+        IdentificacionesGeograficas pi ON pi.persona_id = p.id AND pi.rn = 1
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pi.identificacion_geografica_id
+    WHERE
+        {user}
+    {limit_keyword}
     """
 
     secrets = config.get_config()['vias']
 
     connection = connect_post(secrets)
 
-    df1 = pd.read_sql(query, connection)
-    df1.columns = ["CURP", "IDBeneficiario", "Nombres", "Apellido Paterno", "Apellido Materno", "Municipio", "Sexo", "Fecha de Nacimiento","IdPrograma", "NombrePrograma"]
+    total_df = pd.read_sql(query, connection)
 
-    total_df = df1
-
-    total_df["Via"] = total_df["NombrePrograma"].str.upper().replace(via_dict)
-
-    if user:
-        total_df = total_df[total_df["Via"] == user]
-
-    total_df['edad'] = total_df['Fecha de Nacimiento'].apply(calcular_edad)
-    total_df.drop('Fecha de Nacimiento', inplace=True, axis=1)
+    total_df['edad'] = total_df['fecha_nacimiento'].apply(calcular_edad)
+    total_df.drop('fecha_nacimiento', inplace=True, axis=1)
 
     return total_df
 
