@@ -171,6 +171,106 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
     return total_df
 
 @st.cache_data
+def load_generic_null_data(user="", limit="", curp_list=""):
+    config = Config()
+
+    if limit:
+        limit_keyword = " LIMIT "+str(limit)
+    elif curp_list:
+        curp_str = '(\'' + '\',\''.join(curp_list) + '\')'
+        limit_keyword = f' AND p."CURP" IN {curp_str}'
+    else:
+        print("Sin limite")
+        limit_keyword = ""
+    if user == "proteccion":
+        user = "pp.nombre = ANY (ARRAY['Hambre Cero', 'FISE', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento'])"
+    elif user:
+        user = f"pp.via = '{user}'"
+        print(user)
+    
+
+    query = f"""WITH IdentificacionesGeograficas AS (
+        SELECT *, 
+            ROW_NUMBER() OVER (PARTITION BY persona_id ORDER BY identificacion_geografica_id DESC) AS rn
+        FROM "PersonasOnIdentificacionesGeograficas"
+    )
+    SELECT 
+        p."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        pp.nombre AS nombre_programa, 
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Persona" p
+    LEFT JOIN 
+        "PersonasOnTramites" pt ON p.id = pt.persona_id
+    LEFT JOIN 
+        "Tramite" t ON t.id = pt.tramite_id
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = t.proceso_id
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
+    WHERE 
+        pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37])
+        AND (
+            p."CURP" IS NULL OR
+            p.sexo IS NULL OR
+            p.fecha_nacimiento IS NULL OR
+            pp.nombre IS NULL OR
+            ig.municipio_label IS NULL OR
+            pp.via IS NULL
+        )
+        AND {user}
+
+    UNION
+
+    SELECT 
+        b."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        CAST(pp.nombre AS VARCHAR) AS nombre_programa,
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Beneficiario" b
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = b.programa_id
+    LEFT JOIN 
+        "Persona" p ON p."CURP" = b."CURP"
+    LEFT JOIN 
+        IdentificacionesGeograficas pi ON pi.persona_id = p.id AND pi.rn = 1
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pi.identificacion_geografica_id
+    WHERE
+        (
+            b."CURP" IS NULL OR
+            p.sexo IS NULL OR
+            p.fecha_nacimiento IS NULL OR
+            pp.nombre IS NULL OR
+            ig.municipio_label IS NULL OR
+            pp.via IS NULL
+        )
+    AND {user}
+    {limit_keyword}
+    """
+
+    secrets = config.get_config()['vias']
+
+    connection = connect_post(secrets)
+
+    total_df = pd.read_sql(query, connection)
+
+    total_df['edad'] = total_df['fecha_nacimiento'].apply(calcular_edad)
+    total_df.drop('fecha_nacimiento', inplace=True, axis=1)
+
+    return total_df
+
+@st.cache_data
 def load_symmetric_data(dummy_df, _categorias, _n):
 
     symmetric_matrix = np.zeros((_n, _n), dtype=int)
