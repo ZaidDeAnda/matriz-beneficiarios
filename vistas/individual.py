@@ -11,12 +11,14 @@ user = select_via(get_user())
 
 st.subheader("Muestra de la base de datos")
 
-total_df = load_generic_data_non_dummy(user=user)
+total_df = load_generic_data_non_dummy(user=user, limit=500)
 
 st.dataframe(total_df, width=1400)
 
 with st.form("my_form", clear_on_submit=False):
     submit = st.form_submit_button("Descargar BD completa", on_click=download_df, kwargs={"user" : user})
 
-st.warning(f"Un total de {total_df.isnull().any(axis=1).sum()} registros cuentan con al menos un dato faltante")
-st.download_button("Descargar datos incompletos ", data = total_df.isnull().any(axis=1).to_csv().encode("utf-8"), file_name="datos_incompletos.csv")
+with st.form("null_data", clear_on_submit=False):
+    total_df = load_generic_data_non_dummy(user=user)
+    st.warning(f"Un total de {total_df.isnull().any(axis=1).sum()} registros cuentan con al menos un dato faltante")
+    st.download_button("Descargar datos incompletos ", data = total_df.isnull().any(axis=1).to_csv().encode("utf-8"), file_name="datos_incompletos.csv")
