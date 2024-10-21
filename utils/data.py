@@ -42,15 +42,22 @@ via_dict = {'HAMBRE CERO ESCUELA TIEMPO COMPLETO': 'Alimentación',
             'IMPLANTE COCLEAR' : 'Salud',
             'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024' : 'NA',
             'C�NCER INFANTIL' : 'Salud',
-            'COBERTURA UNIVERSAL PROGRAMA CANCER INFANTIL' : 'Salud'
+            'COBERTURA UNIVERSAL PROGRAMA CANCER INFANTIL' : 'Salud',
+            'FOMERREY' : 'Vivienda'
             }
 
 
 @st.cache_data
-def load_generic_data():
+def load_generic_data(user=""):
     config = Config()
+    conditional = ""
 
-    query = """
+    if user == "proteccionsocial":
+        conditional = "WHERE pp.nombre = ANY (ARRAY['Hambre Cero', 'PROYECTOS PRODUCTIVOS', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento', 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024', 'APOYO PARA LA ADQUISICIÓN DE MATERIAL PARA MEJORAMIENTO DE LA VIVIENDA'])"
+    else:
+        conditional = "WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37])"
+
+    query = f"""
     SELECT p."CURP",
         p.id AS persona_id,
         pp.id as idprograma,
@@ -59,7 +66,22 @@ def load_generic_data():
         LEFT JOIN "PersonasOnTramites" pt ON p.id = pt.persona_id
         LEFT JOIN "Tramite" t ON t.id = pt.tramite_id
         LEFT JOIN "ProcesoPrograma" pp ON pp.id = t.proceso_id
-    WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]);
+    {conditional}
+    
+    UNION
+
+    SELECT 
+        b."CURP", 
+        p.id AS persona_id,
+        pp.id AS idprograma, 
+        pp.nombre AS nombre_programa
+    FROM 
+        "Beneficiario" b
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = b.programa_id
+    LEFT JOIN 
+        "Persona" p ON p."CURP" = b."CURP"
+    {conditional};
     """
 
     secrets = config.get_config()['vias']
@@ -69,16 +91,13 @@ def load_generic_data():
     df1 = pd.read_sql(query, connection)
     df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "NombrePrograma"]
 
-    df2 = pd.read_csv("data/beneficiarios_ps.csv", encoding="latin", sep=";")
+    df1.drop('IdPrograma', inplace=True, axis=1)
+    df1.drop('IDBeneficiario', inplace=True, axis=1)
 
-    total_df = pd.concat([df1, df2], axis=0)
-
-    total_df.drop('IdPrograma', inplace=True, axis=1)
-    total_df.drop('IDBeneficiario', inplace=True, axis=1)
-
-    total_df["NombrePrograma"] = total_df["NombrePrograma"].str.upper().replace(via_dict)
+    if user != "proteccionsocial" :
+        df1["NombrePrograma"] = df1["NombrePrograma"].str.upper().replace(via_dict)
     
-    dummy_df = pd.get_dummies(total_df.loc[total_df["NombrePrograma"] != 'NA'], columns=["NombrePrograma"], prefix="", prefix_sep="").groupby(["CURP"]).sum()
+    dummy_df = pd.get_dummies(df1.loc[df1["NombrePrograma"] != 'NA'], columns=["NombrePrograma"], prefix="", prefix_sep="").groupby(["CURP"]).sum()
     dummy_df[dummy_df > 1] = 1
     categorias = dummy_df.columns
     n = len(categorias)
