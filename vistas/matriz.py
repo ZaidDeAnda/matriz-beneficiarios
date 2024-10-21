@@ -4,8 +4,6 @@ from utils.authentication import get_user
 
 user = get_user()
 
-st.write(user)
-
 dummy_df, categories, n = load_generic_data(user=user)
 
 symmetric_df = load_symmetric_data(dummy_df, categories, n)
