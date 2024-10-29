@@ -13,7 +13,7 @@ st.subheader("Muestra de la base de datos")
 
 total_df = load_generic_data_non_dummy(user=user, limit=500)
 
-st.dataframe(total_df, width=1400)
+st.dataframe(total_df[["CURP","sexo","nombre_programa","municipio","via","edad"]], width=1400)
 
 with st.form("my_form", clear_on_submit=False):
     submit = st.form_submit_button("Descargar BD completa", on_click=download_df, kwargs={"user" : user})

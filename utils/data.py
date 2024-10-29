@@ -52,8 +52,8 @@ def load_generic_data(user=""):
     config = Config()
     conditional = ""
 
-    if user == "proteccionsocial":
-        conditional = "AND pp.nombre = ANY (ARRAY['Hambre Cero', 'PROYECTOS PRODUCTIVOS', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento', 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024', 'APOYO PARA LA ADQUISICIÓN DE MATERIAL PARA MEJORAMIENTO DE LA VIVIENDA'])"
+    # if user == "proteccionsocial":
+    #     conditional = "AND pp.nombre = ANY (ARRAY['Hambre Cero', 'PROYECTOS PRODUCTIVOS', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento', 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024', 'APOYO PARA LA ADQUISICIÓN DE MATERIAL PARA MEJORAMIENTO DE LA VIVIENDA'])"
 
     query = f"""
     SELECT p."CURP",
@@ -67,6 +67,7 @@ def load_generic_data(user=""):
         LEFT JOIN "ProcesoPrograma" pp ON pp.id = t.proceso_id
     WHERE pp.via is not NULL
     {conditional}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
     
     UNION
 
@@ -83,7 +84,8 @@ def load_generic_data(user=""):
     LEFT JOIN 
         "Persona" p ON p."CURP" = b."CURP"
     WHERE pp.via is not NULL
-    {conditional};
+    {conditional}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024';
     """
 
     secrets = config.get_config()['vias']
@@ -123,9 +125,9 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
         print("Sin limite")
         limit_keyword = ""
     if user == "proteccion":
-        user = "pp.nombre = ANY (ARRAY['Hambre Cero', 'FISE', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento'])"
+        user = "AND pp.nombre = ANY (ARRAY['Hambre Cero', 'FISE', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento'])"
     elif user:
-        user = f"pp.via = '{user}'"
+        user = f"AND pp.via = '{user}'"
         print(user)
 
     query = f"""
@@ -154,9 +156,11 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
     LEFT JOIN 
         "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
     WHERE 
-        pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37])
+        pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]) 
     AND 
-        {user}
+        pp.via is not null
+    {user}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
 
     UNION
 
@@ -180,7 +184,9 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
     LEFT JOIN 
         "IdentificacionGeografica" ig ON ig.tramite_id = pi.identificacion_geografica_id
     WHERE
+        pp.via is not null
         {user}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
     {limit_keyword}
     """
 
@@ -318,7 +324,7 @@ def load_symmetric_data(dummy_df, _categorias, _n):
 def load_accumulative_data(dummy_df, _categorias):
 
     accumulative = {via : {
-        x : 0 for x in range(1,6)
+        x : 0 for x in range(len(_categorias))
     } for via in _categorias}
 
     for _, row in dummy_df.iterrows():
