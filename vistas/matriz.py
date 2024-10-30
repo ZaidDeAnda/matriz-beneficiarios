@@ -25,6 +25,8 @@ else:
     filtered_dummy = dummy_df[cols]
     symmetric_df_filtered = load_symmetric_data(filtered_dummy, cols, len(cols))
     st.dataframe(symmetric_df_filtered)
+    accumulative_df = accumulative_df[accumulative_df.index.isin(cols)]
+    accumulative_df = accumulative_df[[1,2,3,4,5,6,7]]
     st.header("Complementariedad de beneficios gabinete de igualdad para todas las personas")
 
 st.dataframe(accumulative_df, width=1400)
