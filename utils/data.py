@@ -159,9 +159,11 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
         pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]) 
     AND 
         pp.via is not null
+    {limit_keyword}
     {user}
     OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
-
+    {limit_keyword}
+    
     UNION
 
     SELECT 
@@ -186,6 +188,7 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
     WHERE
         pp.via is not null
         {user}
+    {limit_keyword}
     OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
     {limit_keyword}
     """
@@ -324,7 +327,7 @@ def load_symmetric_data(dummy_df, _categorias, _n):
 def load_accumulative_data(dummy_df, _categorias):
 
     accumulative = {via : {
-        x : 0 for x in range(len(_categorias))
+        x : 0 for x in range(1,len(_categorias)+1)
     } for via in _categorias}
 
     for _, row in dummy_df.iterrows():

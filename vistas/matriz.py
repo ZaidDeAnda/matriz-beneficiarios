@@ -13,11 +13,8 @@ accumulative_df = load_accumulative_data(dummy_df, categories)
 if user != "proteccionsocial":
     st.header("Complementariedad Usuarios Únicos nueva ruta")
     st.dataframe(symmetric_df, width=1400)
-    
-    
 
     st.header("Usuarios Únicos Nueva Ruta")
-    st.dataframe()
 
 else:
     st.header("Complementariedad de Beneficios de programas sociales de la SII")
