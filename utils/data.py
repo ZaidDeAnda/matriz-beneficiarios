@@ -54,7 +54,6 @@ def load_generic_data(user=""):
 
     # if user == "proteccionsocial":
     #     conditional = "AND pp.nombre = ANY (ARRAY['Hambre Cero', 'PROYECTOS PRODUCTIVOS', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento', 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024', 'APOYO PARA LA ADQUISICIÓN DE MATERIAL PARA MEJORAMIENTO DE LA VIVIENDA'])"
-
     query = f"""
     SELECT p."CURP",
         p.id AS persona_id,
@@ -93,20 +92,33 @@ def load_generic_data(user=""):
     connection = connect_post(secrets)
 
     df1 = pd.read_sql(query, connection)
+    # Renombrar columnas directamente en lugar de cambiarlas posteriormente
     df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "NombrePrograma", "via"]
 
-    df1.drop('IdPrograma', inplace=True, axis=1)
-    df1.drop('IDBeneficiario', inplace=True, axis=1)
-
-    if user != "proteccionsocial" :
-        df1.drop('NombrePrograma', inplace=True, axis=1)
-        dummy_df = pd.get_dummies(df1.loc[df1["via"] != 'NA'], columns=["via"], prefix="", prefix_sep="").groupby(["CURP"]).sum()
+    # Drop múltiple en una sola llamada
+    columns_to_drop = ["IdPrograma", "IDBeneficiario"]
+    if user != "proteccionsocial":
+        columns_to_drop.append("NombrePrograma")
+        group_column = "via"
     else:
-        df1.drop('via', inplace=True, axis=1)
-        dummy_df = pd.get_dummies(df1.loc[df1["NombrePrograma"] != 'NA'], columns=["NombrePrograma"], prefix="", prefix_sep="").groupby(["CURP"]).sum()
-    
-    
-    dummy_df[dummy_df > 1] = 1
+        columns_to_drop.append("via")
+        group_column = "NombrePrograma"
+
+
+
+    df1.drop(columns=columns_to_drop, inplace=True)
+
+    # Generar dummies y agrupar
+    dummy_df = (
+        pd.get_dummies(df1[df1[group_column] != 'NA'], columns=[group_column], prefix="", prefix_sep="")
+        .groupby("CURP")
+        .sum()
+    )
+
+    # Limitar valores a 1
+    dummy_df.clip(upper=1, inplace=True)
+
+    # Construir matriz simétrica con numpy para mejor eficiencia
     categorias = dummy_df.columns
     n = len(categorias)
 
@@ -306,7 +318,6 @@ def load_generic_null_data(user="", limit="", curp_list=""):
 
 @st.cache_data
 def load_symmetric_data(dummy_df, _categorias, _n):
-
     symmetric_matrix = np.zeros((_n, _n), dtype=int)
 
     for i in range(_n):
@@ -326,19 +337,24 @@ def load_symmetric_data(dummy_df, _categorias, _n):
 @st.cache_data
 def load_accumulative_data(dummy_df, _categorias):
 
-    accumulative = {via : {
-        x : 0 for x in range(1,len(_categorias)+1)
-    } for via in _categorias}
+    # Inicializar un DataFrame vacío con categorías y posibles totales
+    total_columns = list(range(1, len(_categorias) + 1))
+    accumulative_df = pd.DataFrame(0, index=_categorias, columns=total_columns)
 
-    for _, row in dummy_df.iterrows():
-        interes = row.loc[row > 0]
-        total = len(interes)
-        vias = interes.index
-        for via in vias:
-            accumulative[via][total] += 1
+    # Calcular el número de categorías activas por fila
+    active_counts = dummy_df.sum(axis=1)
 
-    accumulative_df = pd.DataFrame.from_dict(accumulative).T
-    accumulative_df['Total'] = accumulative_df.sum(axis=1)
+    # Iterar por cada categoría y sumar el conteo acumulado de activaciones
+    for via in _categorias:
+        # Filtrar filas donde la categoría está activa
+        active_rows = dummy_df[via] > 0
+        # Contar ocurrencias para cada total en esas filas activas
+        category_counts = active_counts[active_rows].value_counts()
+        # Actualizar los valores acumulativos en el DataFrame
+        accumulative_df.loc[via, category_counts.index] += category_counts.values
+
+    # Agregar columna de Totales
+    accumulative_df["Total"] = accumulative_df.sum(axis=1)
     return accumulative_df
         
 def drop_missing(df):
