@@ -3,11 +3,12 @@ import streamlit as st
 
 def check_password():
     user_dict = {
-        "via-educacion" : "40qQ1",
-        "via-salud" : "Hp941",
-        "via-trabajo" : "dX803",
-        "via-vivienda" : "29Q3r",
-        "via-alimentacion" : "zN436",
+        "via-educacion" : "Viaedu2024",
+        "via-salud" : "Viasalud2024",
+        "via-trabajo" : "Viatrab2024",
+        "via-vivienda" : "Viaviv2024",
+        "via-alimentacion" : "Viaalimento2024",
+        "proteccionsocial" : "padronsii@2024"
     }
     """Returns `True` if the user had a correct password."""
 
@@ -64,3 +65,5 @@ def select_via(user):
         return "Vivienda"
     elif user == "via-alimentacion":
         return "Alimentación"
+    elif user == "proteccionsocial":
+        return "proteccion"

@@ -42,24 +42,49 @@ via_dict = {'HAMBRE CERO ESCUELA TIEMPO COMPLETO': 'Alimentación',
             'IMPLANTE COCLEAR' : 'Salud',
             'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024' : 'NA',
             'C�NCER INFANTIL' : 'Salud',
-            'COBERTURA UNIVERSAL PROGRAMA CANCER INFANTIL' : 'Salud'
+            'COBERTURA UNIVERSAL PROGRAMA CANCER INFANTIL' : 'Salud',
+            'FOMERREY' : 'Vivienda'
             }
 
 
 @st.cache_data
-def load_generic_data():
+def load_generic_data(user=""):
     config = Config()
+    conditional = ""
 
-    query = """
+    # if user == "proteccionsocial":
+    #     conditional = "AND pp.nombre = ANY (ARRAY['Hambre Cero', 'PROYECTOS PRODUCTIVOS', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento', 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024', 'APOYO PARA LA ADQUISICIÓN DE MATERIAL PARA MEJORAMIENTO DE LA VIVIENDA'])"
+    query = f"""
     SELECT p."CURP",
         p.id AS persona_id,
         pp.id as idprograma,
-        pp.nombre AS nombre_programa
+        pp.nombre AS nombre_programa,
+        pp.via as via
     FROM "Persona" p
         LEFT JOIN "PersonasOnTramites" pt ON p.id = pt.persona_id
         LEFT JOIN "Tramite" t ON t.id = pt.tramite_id
         LEFT JOIN "ProcesoPrograma" pp ON pp.id = t.proceso_id
-    WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]);
+    WHERE pp.via is not NULL
+    {conditional}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
+    
+    UNION
+
+    SELECT 
+        b."CURP", 
+        p.id AS persona_id,
+        pp.id AS idprograma, 
+        pp.nombre AS nombre_programa,
+        pp.via
+    FROM 
+        "Beneficiario" b
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = b.programa_id
+    LEFT JOIN 
+        "Persona" p ON p."CURP" = b."CURP"
+    WHERE pp.via is not NULL
+    {conditional}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024';
     """
 
     secrets = config.get_config()['vias']
@@ -67,19 +92,33 @@ def load_generic_data():
     connection = connect_post(secrets)
 
     df1 = pd.read_sql(query, connection)
-    df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "NombrePrograma"]
+    # Renombrar columnas directamente en lugar de cambiarlas posteriormente
+    df1.columns = ["CURP", "IDBeneficiario", "IdPrograma", "NombrePrograma", "via"]
 
-    df2 = pd.read_csv("data/beneficiarios_ps.csv", encoding="latin", sep=";")
+    # Drop múltiple en una sola llamada
+    columns_to_drop = ["IdPrograma", "IDBeneficiario"]
+    if user != "proteccionsocial":
+        columns_to_drop.append("NombrePrograma")
+        group_column = "via"
+    else:
+        columns_to_drop.append("via")
+        group_column = "NombrePrograma"
 
-    total_df = pd.concat([df1, df2], axis=0)
 
-    total_df.drop('IdPrograma', inplace=True, axis=1)
-    total_df.drop('IDBeneficiario', inplace=True, axis=1)
 
-    total_df["NombrePrograma"] = total_df["NombrePrograma"].str.upper().replace(via_dict)
-    
-    dummy_df = pd.get_dummies(total_df.loc[total_df["NombrePrograma"] != 'NA'], columns=["NombrePrograma"], prefix="", prefix_sep="").groupby(["CURP"]).sum()
-    dummy_df[dummy_df > 1] = 1
+    df1.drop(columns=columns_to_drop, inplace=True)
+
+    # Generar dummies y agrupar
+    dummy_df = (
+        pd.get_dummies(df1[df1[group_column] != 'NA'], columns=[group_column], prefix="", prefix_sep="")
+        .groupby("CURP")
+        .sum()
+    )
+
+    # Limitar valores a 1
+    dummy_df.clip(upper=1, inplace=True)
+
+    # Construir matriz simétrica con numpy para mejor eficiencia
     categorias = dummy_df.columns
     n = len(categorias)
 
@@ -97,48 +136,188 @@ def load_generic_data_non_dummy(user="", limit="", curp_list=""):
     else:
         print("Sin limite")
         limit_keyword = ""
+    if user == "proteccion":
+        user = "AND pp.nombre = ANY (ARRAY['Hambre Cero', 'FISE', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento'])"
+    elif user:
+        user = f"AND pp.via = '{user}'"
+        print(user)
 
     query = f"""
-    SELECT p."CURP",
-        p.id AS persona_id,
-        p.nombres as nombres,
-        p.ap_paterno as ApellidoPaterno,
-        p.ap_materno as ApellidoMaterno,
-        ig.municipio_label as municipio,
-        p.sexo as sexo,
-        p.fecha_nacimiento as fecha_nacimiento,
-        pp.id as idprograma,
-        pp.nombre AS nombre_programa
-    FROM "Persona" p
-        LEFT JOIN "PersonasOnTramites" pt ON p.id = pt.persona_id
-        LEFT JOIN "Tramite" t ON t.id = pt.tramite_id
-        LEFT JOIN "ProcesoPrograma" pp ON pp.id = t.proceso_id
-        LEFT JOIN "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
-    WHERE pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]){limit_keyword};
+    WITH IdentificacionesGeograficas AS (
+    SELECT *, 
+           ROW_NUMBER() OVER (PARTITION BY persona_id ORDER BY identificacion_geografica_id DESC) AS rn
+    FROM "PersonasOnIdentificacionesGeograficas"
+    )
+    SELECT 
+        p."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        pp.nombre AS nombre_programa, 
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Persona" p
+    LEFT JOIN 
+        "PersonasOnTramites" pt ON p.id = pt.persona_id
+    LEFT JOIN 
+        "Tramite" t ON t.id = pt.tramite_id
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = t.proceso_id
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
+    WHERE 
+        pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37]) 
+    AND 
+        pp.via is not null
+    {limit_keyword}
+    {user}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
+    {limit_keyword}
+    
+    UNION
+
+    SELECT 
+        b."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        CAST(pp.nombre AS VARCHAR) AS nombre_programa,
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Beneficiario" b
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = b.programa_id
+    LEFT JOIN 
+        "Persona" p ON p."CURP" = b."CURP"
+    LEFT JOIN 
+        IdentificacionesGeograficas pi ON pi.persona_id = p.id AND pi.rn = 1
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pi.identificacion_geografica_id
+    WHERE
+        pp.via is not null
+        {user}
+    {limit_keyword}
+    OR pp.nombre = 'APOYO PARA PERSONAS EN EMERGENCIA POR FENÓMENO SOCIAL O NATURAL DEL EJERCICIO FISCAL 2024'
+    {limit_keyword}
     """
 
     secrets = config.get_config()['vias']
 
     connection = connect_post(secrets)
 
-    df1 = pd.read_sql(query, connection)
-    df1.columns = ["CURP", "IDBeneficiario", "Nombres", "Apellido Paterno", "Apellido Materno", "Municipio", "Sexo", "Fecha de Nacimiento","IdPrograma", "NombrePrograma"]
+    total_df = pd.read_sql(query, connection)
 
-    total_df = df1
+    total_df['edad'] = total_df['fecha_nacimiento'].apply(calcular_edad)
+    total_df.drop('fecha_nacimiento', inplace=True, axis=1)
 
-    total_df["Via"] = total_df["NombrePrograma"].str.upper().replace(via_dict)
+    return total_df
 
-    if user:
-        total_df = total_df[total_df["Via"] == user]
+@st.cache_data
+def load_generic_null_data(user="", limit="", curp_list=""):
+    config = Config()
 
-    total_df['edad'] = total_df['Fecha de Nacimiento'].apply(calcular_edad)
-    total_df.drop('Fecha de Nacimiento', inplace=True, axis=1)
+    if limit:
+        limit_keyword = " LIMIT "+str(limit)
+    elif curp_list:
+        curp_str = '(\'' + '\',\''.join(curp_list) + '\')'
+        limit_keyword = f' AND p."CURP" IN {curp_str}'
+    else:
+        print("Sin limite")
+        limit_keyword = ""
+    if user == "proteccion":
+        user = "pp.nombre = ANY (ARRAY['Hambre Cero', 'FISE', 'IMPULSO A CUIDADORAS', 'PERSONAS CON DISCAPACIDAD', 'Modelo de Acompañamiento'])"
+    elif user:
+        user = f"pp.via = '{user}'"
+        print(user)
+    
+
+    query = f"""WITH IdentificacionesGeograficas AS (
+        SELECT *, 
+            ROW_NUMBER() OVER (PARTITION BY persona_id ORDER BY identificacion_geografica_id DESC) AS rn
+        FROM "PersonasOnIdentificacionesGeograficas"
+    )
+    SELECT 
+        p."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        pp.nombre AS nombre_programa, 
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Persona" p
+    LEFT JOIN 
+        "PersonasOnTramites" pt ON p.id = pt.persona_id
+    LEFT JOIN 
+        "Tramite" t ON t.id = pt.tramite_id
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = t.proceso_id
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pt.tramite_id
+    WHERE 
+        pp.id = ANY (ARRAY[1,2,3,5,6,7,8,9,18,19,20,21,22,23,24,25,26,27,28,29,30,31,33,34,37])
+        AND (
+            p."CURP" IS NULL OR
+            p.sexo IS NULL OR
+            p.fecha_nacimiento IS NULL OR
+            pp.nombre IS NULL OR
+            ig.municipio_label IS NULL OR
+            pp.via IS NULL
+        )
+        AND {user}
+
+    UNION
+
+    SELECT 
+        b."CURP", 
+        p.id AS persona_id, 
+        p.sexo AS sexo, 
+        p.fecha_nacimiento AS fecha_nacimiento, 
+        pp.id AS idprograma, 
+        CAST(pp.nombre AS VARCHAR) AS nombre_programa,
+        ig.municipio_label AS municipio, 
+        CAST(pp.via AS VARCHAR) AS via
+    FROM 
+        "Beneficiario" b
+    LEFT JOIN 
+        "ProcesoPrograma" pp ON pp.id = b.programa_id
+    LEFT JOIN 
+        "Persona" p ON p."CURP" = b."CURP"
+    LEFT JOIN 
+        IdentificacionesGeograficas pi ON pi.persona_id = p.id AND pi.rn = 1
+    LEFT JOIN 
+        "IdentificacionGeografica" ig ON ig.tramite_id = pi.identificacion_geografica_id
+    WHERE
+        (
+            b."CURP" IS NULL OR
+            p.sexo IS NULL OR
+            p.fecha_nacimiento IS NULL OR
+            pp.nombre IS NULL OR
+            ig.municipio_label IS NULL OR
+            pp.via IS NULL
+        )
+    AND {user}
+    {limit_keyword}
+    """
+
+    secrets = config.get_config()['vias']
+
+    connection = connect_post(secrets)
+
+    total_df = pd.read_sql(query, connection)
+
+    total_df['edad'] = total_df['fecha_nacimiento'].apply(calcular_edad)
+    total_df.drop('fecha_nacimiento', inplace=True, axis=1)
 
     return total_df
 
 @st.cache_data
 def load_symmetric_data(dummy_df, _categorias, _n):
-
     symmetric_matrix = np.zeros((_n, _n), dtype=int)
 
     for i in range(_n):
@@ -158,19 +337,33 @@ def load_symmetric_data(dummy_df, _categorias, _n):
 @st.cache_data
 def load_accumulative_data(dummy_df, _categorias):
 
-    accumulative = {via : {
-        x : 0 for x in range(1,6)
-    } for via in _categorias}
+    # Inicializar un DataFrame vacío con categorías y posibles totales
+    total_columns = list(range(1, len(_categorias) + 1))
+    accumulative_df = pd.DataFrame(0, index=_categorias, columns=total_columns)
 
-    for _, row in dummy_df.iterrows():
-        interes = row.loc[row > 0]
-        total = len(interes)
-        vias = interes.index
-        for via in vias:
-            accumulative[via][total] += 1
+    # Calcular el número de programas activos por curp. Por ejemplo
+    # curp 1 esta en 3 programas, curp 2 en 5, etc
+    active_counts = dummy_df.sum(axis=1)
 
-    accumulative_df = pd.DataFrame.from_dict(accumulative).T
-    accumulative_df['Total'] = accumulative_df.sum(axis=1)
+    # Iterar por cada programa y sumar el conteo acumulado de priogramas activos
+    # En general, es un mapeo raro. Para cada categoria, obtenemos los curps activos
+    # luego para esos curps activos, revisamos cada curp en cuantos programas está
+    # curp 1 está en 3 programas, curp 2 en 5, etc. para tener un conteo de cuantos curps
+    # estan en cada cantidad de programas. cuantos curps en 1, cuantos en 2, y así.
+    # y así para cada categoría.
+    for via in _categorias:
+        # Filtrar curps donde este programa está activo
+        active_rows = dummy_df[via] > 0
+        # ahora para esos curps, obtenemos en cuantos programas estan activos.
+        # ejemplo, curp 1 está en programa 1, curp 1 esta en 3 programas, etc
+        category_counts = active_counts[active_rows].value_counts()
+        # Actualizar los valores acumulativos en el DataFrame
+        # ejemplo, vimos que programa 1 tiene curp 1, y curp 1 tiene 3 programas.
+        # entonces, sumamos 1 a programa 1 en columna 3
+        accumulative_df.loc[via, category_counts.index] += category_counts.values
+
+    # Agregar columna de Totales
+    accumulative_df["Total"] = accumulative_df.sum(axis=1)
     return accumulative_df
         
 def drop_missing(df):
