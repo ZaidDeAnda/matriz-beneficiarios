@@ -341,16 +341,25 @@ def load_accumulative_data(dummy_df, _categorias):
     total_columns = list(range(1, len(_categorias) + 1))
     accumulative_df = pd.DataFrame(0, index=_categorias, columns=total_columns)
 
-    # Calcular el número de categorías activas por fila
+    # Calcular el número de programas activos por curp. Por ejemplo
+    # curp 1 esta en 3 programas, curp 2 en 5, etc
     active_counts = dummy_df.sum(axis=1)
 
-    # Iterar por cada categoría y sumar el conteo acumulado de activaciones
+    # Iterar por cada programa y sumar el conteo acumulado de priogramas activos
+    # En general, es un mapeo raro. Para cada categoria, obtenemos los curps activos
+    # luego para esos curps activos, revisamos cada curp en cuantos programas está
+    # curp 1 está en 3 programas, curp 2 en 5, etc. para tener un conteo de cuantos curps
+    # estan en cada cantidad de programas. cuantos curps en 1, cuantos en 2, y así.
+    # y así para cada categoría.
     for via in _categorias:
-        # Filtrar filas donde la categoría está activa
+        # Filtrar curps donde este programa está activo
         active_rows = dummy_df[via] > 0
-        # Contar ocurrencias para cada total en esas filas activas
+        # ahora para esos curps, obtenemos en cuantos programas estan activos.
+        # ejemplo, curp 1 está en programa 1, curp 1 esta en 3 programas, etc
         category_counts = active_counts[active_rows].value_counts()
         # Actualizar los valores acumulativos en el DataFrame
+        # ejemplo, vimos que programa 1 tiene curp 1, y curp 1 tiene 3 programas.
+        # entonces, sumamos 1 a programa 1 en columna 3
         accumulative_df.loc[via, category_counts.index] += category_counts.values
 
     # Agregar columna de Totales
